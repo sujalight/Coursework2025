@@ -1,54 +1,69 @@
 #include <iostream>
+#include <string>
 using namespace std;
-class temperature
-{
-    float t;
-public:
-    void f2c (float x)
-    {
-        t=(x - 32) * 5/9;
-    }
-    void c2f (float x)
-    {
-        t=(x * 9/5) + 32;
-    }
-    void displayf2c()
-    {
-     cout<<"The required temperature is :"<<t<<" C"<<endl;
-    }
-    void displayc2f ()
-    {
 
-        cout <<"The required temperature is:"<<t<<" F"<<endl;
+class Student {
+private:
+    string name;
+    int marks[3];
+    int totalMarks;
+    float average;
+    char grade;
+
+public:
+
+    void getdata() {
+        cout << "Enter student's name: ";
+        cin>>name;
+
+
+        for (int i = 0; i < 3; ++i) {
+            cout << "Enter mark for subject " << i + 1 << ": ";
+            cin >> marks[i];
+
+
+            if (marks[i] < 0 || marks[i] > 100) {
+                cout << "Error: Marks must be between 0 and 100!" << endl;
+                exit(1);
+            }
+        }
+    }
+
+    void calculateGrade() {
+
+        totalMarks = marks[0] + marks[1] + marks[2];
+        average = totalMarks / 3.0;
+
+
+        if (average >= 90) {
+            grade = 'A';
+        } else if (average >= 80) {
+            grade = 'B';
+        } else if (average >= 70) {
+            grade = 'C';
+        } else if (average >= 60) {
+            grade = 'D';
+        } else {
+            grade = 'F';
+        }
+    }
+
+
+    void displayDetails() {
+        cout << "\nStudent's Name: " << name << endl;
+        cout << "Your Total Marks is: " << totalMarks <<" / 300"<< endl;
+        cout << "Your Average Marks is: " << average << " / 100"<<endl;
+        cout << "Your Grade is: " << grade << endl;
     }
 };
-int main ()
-{
-    temperature t1;
-    float x;
-    int ch;
-    cout <<"Press 1 if you want to convert Fahrenheit into Celsius"<<endl
-    <<"Press 2 if you wan to convert Celsius into Fahrenheit"<<endl;
-    cin >> ch;
 
-    if (ch==1)
-    {
-        cout <<"Enter the temperature in Fahrenheit:";
-        cin>>x;
-        t1. f2c (x);
-        t1. displayf2c();
-    }
-    if (ch==2)
-    {
-        cout <<"Enter the temperature in Celsius:";
-        cin>>x;
-        t1. c2f (x);
-        t1. displayc2f ();
-    }
-    else
-        {
-        cout <<"Invalid input!!! Please enter 1 to convert to Celsius or enter 2 to convert to Fahrenheit";
-        }
+int main() {
+    Student student;
+
+    student.getdata();
+    student.calculateGrade();
+    student.displayDetails();
+
     return 0;
 }
 
