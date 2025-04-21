@@ -1,0 +1,290 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <conio.h>
+#include <windows.h>
+#include <cstdlib>
+#include <ctime>
+
+using namespace std;
+
+const int MAZE_SIZE = 20;
+const char WALL = (char)219;
+const char PATH = ' ';
+const char PLAYER = 'P';
+const char EXIT = 'E';
+const char COLLECTIBLE = 'O';
+const char ENEMY = 'X';
+
+enum ConsoleColor {
+    BLACK = 0, BLUE, GREEN, CYAN, RED, MAGENTA, YELLOW, WHITE,
+    GRAY, BRIGHT_BLUE, BRIGHT_GREEN, BRIGHT_CYAN, BRIGHT_RED, BRIGHT_MAGENTA, BRIGHT_YELLOW, BRIGHT_WHITE
+};
+
+void SetColor(ConsoleColor text, ConsoleColor background = BLACK) {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), (background << 4) | text);
+}
+
+class Entity {
+protected:
+    int x, y;
+public:
+    Entity(int x, int y) : x(x), y(y) {}
+    virtual ~Entity() {}
+    int getX() const { return x; }
+    int getY() const { return y; }
+    void setPosition(int newX, int newY) { x = newX; y = newY; }
+    virtual char getSymbol() const = 0;
+    virtual ConsoleColor getColor() const = 0;
+};
+
+class Player : public Entity {
+private:
+    int score;
+    int moves;
+public:
+    Player(int x, int y) : Entity(x, y), score(0), moves(0) {}
+    char getSymbol() const override { return PLAYER; }
+    ConsoleColor getColor() const override { return BRIGHT_GREEN; }
+    void increaseScore(int amount) { score += amount; }
+    void incrementMoves() { moves++; }
+    int getScore() const { return score; }
+    int getMoves() const { return moves; }
+    void reset() { score = 0; moves = 0; setPosition(1, 1); }
+};
+
+class Enemy : public Entity {
+public:
+    Enemy(int x, int y) : Entity(x, y) {}
+    char getSymbol() const override { return ENEMY; }
+    ConsoleColor getColor() const override { return BRIGHT_RED; }
+
+    void moveRandom(const vector<vector<char>>& maze) {
+        int direction = rand() % 4;
+        int newX = x, newY = y;
+        switch (direction) {
+            case 0: newY--; break; case 1: newX++; break;
+            case 2: newY++; break; case 3: newX--; break;
+        }
+        if (newX >= 0 && newX < MAZE_SIZE && newY >= 0 && newY < MAZE_SIZE && maze[newY][newX] != WALL)
+            setPosition(newX, newY);
+    }
+};
+
+class MazeGame {
+private:
+    vector<vector<char>> maze;
+    Player player;
+    vector<Enemy> enemies;
+    int currentLevel = 1;
+    bool gameOver = false;
+    bool gameWon = false;
+    vector<pair<int, int>> collectiblePositions;
+    int collectiblesRevealed = 0;
+    int totalScore = 0;
+    int totalMoves = 0;
+
+    void initializeMaze() {
+        maze = vector<vector<char>>(MAZE_SIZE, vector<char>(MAZE_SIZE, PATH));
+        for (int i = 0; i < MAZE_SIZE; i++) {
+            maze[0][i] = maze[MAZE_SIZE - 1][i] = WALL;
+            maze[i][0] = maze[i][MAZE_SIZE - 1] = WALL;
+        }
+
+        for (int i = 2; i < 8; i++) {
+            maze[i][5] = WALL; maze[i][15] = WALL;
+        }
+        for (int i = 12; i < 18; i++) {
+            maze[i][5] = WALL; maze[i][15] = WALL;
+        }
+        for (int i = 5; i < 15; i++) {
+            maze[7][i] = WALL; maze[12][i] = WALL;
+        }
+
+        maze[MAZE_SIZE - 2][MAZE_SIZE - 2] = EXIT;
+
+        collectiblePositions = {{3, 1}, {1, 5}, {5, 3}, {6, 8}, {10, 10}, {15, 5}, {18, 15}, {12, 18}};
+        collectiblesRevealed = 1;
+        maze[collectiblePositions[0].second][collectiblePositions[0].first] = COLLECTIBLE;
+
+        enemies.clear();
+        enemies.push_back(Enemy(3, 3));
+        if (currentLevel >= 2) enemies.push_back(Enemy(6, 3));
+        if (currentLevel >= 3) enemies.push_back(Enemy(3, 6));
+        if (currentLevel >= 4) enemies.push_back(Enemy(15, 10));
+    }
+
+    void clearScreen() {
+        COORD coord = {0, 0};
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    }
+
+    void drawMaze() {
+        clearScreen();
+        SetColor(BRIGHT_WHITE);
+        cout << "Level: " << currentLevel << " | Total Score: " << totalScore + player.getScore()
+             << " | Moves: " << totalMoves + player.getMoves() << endl << endl;
+
+        for (int y = 0; y < MAZE_SIZE; y++) {
+            for (int x = 0; x < MAZE_SIZE; x++) {
+                if (x == player.getX() && y == player.getY()) {
+                    SetColor(player.getColor()); cout << player.getSymbol(); continue;
+                }
+                bool enemyHere = false;
+                for (auto& e : enemies) {
+                    if (x == e.getX() && y == e.getY()) {
+                        SetColor(e.getColor()); cout << e.getSymbol(); enemyHere = true; break;
+                    }
+                }
+                if (!enemyHere) {
+                    if (maze[y][x] == WALL) SetColor(BRIGHT_BLUE);
+                    else if (maze[y][x] == COLLECTIBLE) SetColor(BRIGHT_YELLOW);
+                    else if (maze[y][x] == EXIT) SetColor(BRIGHT_MAGENTA);
+                    else SetColor(WHITE);
+                    cout << maze[y][x];
+                }
+            }
+            cout << endl;
+        }
+        SetColor(WHITE);
+    }
+
+    bool isValidMove(int x, int y) {
+        return x >= 0 && x < MAZE_SIZE && y >= 0 && y < MAZE_SIZE && maze[y][x] != WALL;
+    }
+
+    void handleCollision(int x, int y) {
+        if (maze[y][x] == COLLECTIBLE) {
+            player.increaseScore(10);
+            maze[y][x] = PATH;
+            if (collectiblesRevealed < collectiblePositions.size()) {
+                auto [nextX, nextY] = collectiblePositions[collectiblesRevealed];
+                maze[nextY][nextX] = COLLECTIBLE;
+                collectiblesRevealed++;
+            }
+        }
+        if (maze[y][x] == EXIT) { gameWon = true; gameOver = true; }
+        for (auto& e : enemies)
+            if (x == e.getX() && y == e.getY()) { gameWon = false; gameOver = true; }
+    }
+
+    void moveEnemies() {
+        for (auto& e : enemies) {
+            e.moveRandom(maze);
+            if (e.getX() == player.getX() && e.getY() == player.getY()) {
+                gameWon = false;
+                gameOver = true;
+            }
+        }
+    }
+
+public:
+    MazeGame() : player(1, 1) {
+        srand((unsigned)time(0));
+    }
+
+    void start() {
+        while (true) {
+            player.reset();
+            gameOver = false;
+            gameWon = false;
+            initializeMaze();
+
+            while (!gameOver) {
+                drawMaze();
+                if (_kbhit()) {
+                    char input = tolower(_getch());
+                    int nx = player.getX(), ny = player.getY();
+                    if (input == 'w') ny--;
+                    else if (input == 'a') nx--;
+                    else if (input == 's') ny++;
+                    else if (input == 'd') nx++;
+                    else if (input == 'q') return;
+
+                    if (isValidMove(nx, ny)) {
+                        player.setPosition(nx, ny);
+                        player.incrementMoves();
+                        handleCollision(nx, ny);
+                    }
+                }
+                if (player.getMoves() % 2 == 0) moveEnemies();
+                Sleep(100);
+            }
+
+            drawMaze();
+            if (gameWon) {
+                SetColor(BRIGHT_GREEN);
+                cout << "\nLevel " << currentLevel << " Complete!" << endl;
+                totalScore += player.getScore();
+                totalMoves += player.getMoves();
+                if (currentLevel < 3) {
+                    cout << "Score: " << totalScore << " | Moves taken: " << totalMoves << endl;
+                    cout << "Press any key to next level    " << endl;
+                    _getch();
+                    currentLevel++;
+                } else {
+                    cout << "All levels complete! Final Score: " << totalScore << " | Moves: " << totalMoves << endl;
+                    cout << "Thanks for playing! Press any key to return to menu..." << endl;
+                    _getch();
+                    break;
+                }
+            } else {
+                SetColor(BRIGHT_RED);
+                cout << "\n!!!! GAME OVER !!" << endl;
+                cout << "You were caught by enemy'X'"<<endl;
+                cout << "Wanna try again ??? (Y/N): ";
+                char choice;
+                cin >> choice;
+                if (tolower(choice) != 'y') break;
+            }
+        }
+    }
+};
+
+int main() {
+    system("mode con: cols=60 lines=40");
+
+    while (true) {
+        system("cls");
+        SetColor(BRIGHT_CYAN);
+        cout << "MAZE GAME\n";
+        SetColor(WHITE);
+        cout << "---------\n1. Start\n2. Tutorial\n3. Exit\n4. About\nChoose: ";
+        char ch = _getch();
+        switch (ch) {
+            case '1': {
+                MazeGame game;
+                game.start();
+                break;
+            }
+            case '2': {
+                system("cls");
+                SetColor(BRIGHT_YELLOW);
+                cout << "Tutorial\n--------\n";
+                SetColor(WHITE);
+                cout << "WASD to move, Q to quit\n";
+                cout << "Collect ";
+                SetColor(BRIGHT_YELLOW); cout << "'O' ";
+                SetColor(WHITE); cout << "and reach ";
+                SetColor(BRIGHT_MAGENTA); cout << "'E'\n";
+                SetColor(WHITE);
+                cout << "Avoid ";
+                SetColor(BRIGHT_RED); cout << "'X'\n";
+                SetColor(WHITE); cout << "Press any key...";
+                _getch(); break;
+            }
+            case '3': return 0;
+            case '4': {
+                system("cls");
+                SetColor(BRIGHT_GREEN);
+                cout << "About\n-----\n";
+                SetColor(WHITE);
+                cout << "Created by Sujal Chaudhary\n";
+                cout << "C++ Maze Game Project\n";
+                cout << "Press any key...";
+                _getch(); break;
+            }
+        }
+    }
+}
